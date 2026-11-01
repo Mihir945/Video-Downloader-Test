@@ -116,22 +116,9 @@ def get_node_binary() -> Optional[str]:
     return None
 
 
-def get_cookie_file() -> Optional[str]:
-    """Finds cookies.txt file if provided by user/deployment."""
-    candidates = [
-        BASE_DIR / "cookies.txt",
-        Path(__file__).resolve().parent / "cookies.txt",
-    ]
-    for c in candidates:
-        if c.is_file() and c.stat().st_size > 0:
-            return str(c)
-    return None
-
-
 def get_base_ydl_opts() -> Dict[str, Any]:
-    """Constructs robust yt-dlp options supporting JS runtimes and challenge solvers."""
+    """Constructs robust yt-dlp options supporting Node.js JS challenge runtime."""
     node_exe = get_node_binary()
-    cookie_file = get_cookie_file()
 
     opts: Dict[str, Any] = {
         "nocheckcertificate": True,
@@ -144,8 +131,6 @@ def get_base_ydl_opts() -> Dict[str, Any]:
     }
     if node_exe:
         opts["js_runtimes"] = {"node": {"path": node_exe}}
-    if cookie_file:
-        opts["cookiefile"] = cookie_file
     return opts
 
 
@@ -208,6 +193,57 @@ def health_check():
     }
 
 
+def categorize_ytdlp_error(error_msg: str, operation: str = "fetching video details") -> str:
+    """
+    Parses yt-dlp extraction or download errors into clear, user-friendly explanations.
+    Distinguishes external platform access/bot verification challenges from application bugs,
+    and provides legitimate alternatives for owner-authorized content.
+    """
+    upper_err = error_msg.upper()
+    lower_err = error_msg.lower()
+
+    if "CONFIRM YOU'RE NOT A BOT" in upper_err or "CONFIRM YOU’RE NOT A BOT" in upper_err:
+        return (
+            "YouTube Bot Verification: YouTube detected automated access from this server's IP address "
+            "and requested interactive verification ('Sign in to confirm you're not a bot').\n\n"
+            "This is an external access control check applied by YouTube to datacenter/cloud hosting IPs, "
+            "not a bug in the application. Per platform terms and security standards, automated bot challenges "
+            "are not bypassed.\n\n"
+            "Legitimate options for content you are authorized to access:\n"
+            "- Video Owners: You can download your own videos directly in high quality from YouTube Studio (studio.youtube.com > Content > Options > Download).\n"
+            "- Use your original uploaded master video file from your storage.\n"
+            "- If running this application locally on your computer, residential network connections are typically not blocked."
+        )
+
+    if "SIGN IN TO CONFIRM YOUR AGE" in upper_err:
+        return (
+            "Age-Restricted Content: This video requires age verification on YouTube. "
+            "To safeguard account privacy and adhere to platform access controls, automated sign-in is not supported."
+        )
+
+    if "PRIVATE VIDEO" in upper_err:
+        return (
+            "Private Video: This video is designated Private by its uploader and can only be accessed "
+            "by accounts explicitly granted permission."
+        )
+
+    if "DRM" in upper_err:
+        return "DRM Protected: This content is protected by Digital Rights Management (DRM) and cannot be downloaded."
+
+    if "INCOMPLETE YOUTUBE ID" in upper_err or "VIDEO UNAVAILABLE" in upper_err:
+        return "Video Unavailable: The video does not exist, has been removed, or the URL is malformed. Please verify the URL."
+
+    if "HTTP ERROR 429" in upper_err or "TOO MANY REQUESTS" in upper_err:
+        return "Rate Limited: YouTube is temporarily limiting automated requests from this server IP. Please wait a few moments before trying again."
+
+    if "FFMPEG" in lower_err:
+        return "FFmpeg Error: FFmpeg is required to process and merge media streams. Please ensure FFmpeg is installed."
+
+    clean_error = re.sub(r"^ERROR:\s*", "", error_msg, flags=re.IGNORECASE)
+    clean_error = re.sub(r"\[youtube\]\s*", "", clean_error, flags=re.IGNORECASE)
+    return f"Unable to complete {operation}: {clean_error.strip()}"
+
+
 @app.post("/fetch")
 def fetch_video_info(req: FetchRequest):
     """
@@ -217,6 +253,8 @@ def fetch_video_info(req: FetchRequest):
     url = req.url.strip()
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         raise HTTPException(status_code=400, detail="Invalid URL. Please enter a valid HTTP or HTTPS video URL.")
+
+    logger.info(f"[METADATA EXTRACTION START] URL: {url}")
 
     # Options for fast metadata extraction using JS challenge solver and modern player clients
     ydl_opts = get_base_ydl_opts()
@@ -232,6 +270,7 @@ def fetch_video_info(req: FetchRequest):
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
             if not info:
+                logger.error(f"[METADATA EXTRACTION FAILED] Empty metadata returned for URL: {url}")
                 raise HTTPException(status_code=404, detail="Could not extract video metadata.")
 
             # Check if this is a playlist
@@ -301,6 +340,8 @@ def fetch_video_info(req: FetchRequest):
                             "has_audio": fmt.get("acodec") != "none"
                         })
 
+            logger.info(f"[METADATA EXTRACTION SUCCESS] Title: '{title}' | Formats: {len(quality_options)}")
+
             return {
                 "title": title,
                 "thumbnail": thumbnail,
@@ -313,24 +354,13 @@ def fetch_video_info(req: FetchRequest):
 
     except yt_dlp.utils.DownloadError as e:
         error_msg = str(e)
-        logger.warning(f"DownloadError during fetch: {error_msg}")
-        if "DRM" in error_msg.upper():
-            detail = "This video is protected by Digital Rights Management (DRM) and cannot be downloaded."
-        elif "Private video" in error_msg:
-            detail = "This video is set to Private by its owner and cannot be accessed."
-        elif "Sign in to confirm your age" in error_msg:
-            detail = "This video is age-restricted on YouTube and requires age verification."
-        elif "Sign in to confirm you're not a bot" in error_msg:
-            detail = "YouTube triggered a bot protection check on the server IP. Please try another video or retry in a few moments."
-        elif "Incomplete YouTube ID" in error_msg or "Video unavailable" in error_msg:
-            detail = "Video is unavailable or has been removed. Please verify the URL."
-        else:
-            clean_error = re.sub(r"^ERROR:\s*", "", error_msg)
-            clean_error = re.sub(r"\[youtube\]\s*", "", clean_error)
-            detail = f"Could not access video: {clean_error}"
+        logger.error(f"[METADATA EXTRACTION FAILED] yt-dlp DownloadError for URL {url}: {error_msg}")
+        detail = categorize_ytdlp_error(error_msg, "metadata extraction")
         raise HTTPException(status_code=400, detail=detail)
+    except HTTPException:
+        raise
     except Exception as e:
-        logger.error(f"Unexpected error during fetch: {e}")
+        logger.error(f"[METADATA EXTRACTION FAILED] Unexpected error for URL {url}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch video details: {str(e)}")
 
 
@@ -345,6 +375,8 @@ def run_download_task(download_id: str, url: str, format_id: str):
             return
         job["status"] = "downloading"
         job["progress"] = 0.0
+
+    logger.info(f"[DOWNLOAD PROCESSING START] ID: {download_id} | URL: {url} | Format: {format_id}")
 
     # Ensure cleanup of old downloads
     cleanup_old_downloads()
@@ -467,17 +499,12 @@ def run_download_task(download_id: str, url: str, format_id: str):
                     download_jobs[download_id]["progress"] = 99.0
                     download_jobs[download_id]["filepath"] = str(target_file)
                     download_jobs[download_id]["filename"] = clean_name
-            logger.info(f"Download {download_id} successfully prepared on backend: {clean_name}")
+            logger.info(f"[DOWNLOAD PROCESSING SUCCESS] ID: {download_id} | Output file prepared: {clean_name}")
 
     except Exception as e:
         error_text = str(e)
-        logger.error(f"Download {download_id} failed: {error_text}")
-        if "ffmpeg" in error_text.lower():
-            user_msg = "FFmpeg error: FFmpeg is required to merge audio and video. Please ensure FFmpeg is installed and added to system PATH."
-        elif "DRM" in error_text.upper():
-            user_msg = "Download rejected: Media is protected by DRM access controls."
-        else:
-            user_msg = re.sub(r"^ERROR:\s*", "", error_text)
+        logger.error(f"[DOWNLOAD PROCESSING FAILED] ID: {download_id} | Error: {error_text}", exc_info=True)
+        user_msg = categorize_ytdlp_error(error_text, "video stream downloading")
 
         with jobs_lock:
             if download_id in download_jobs:

@@ -124,10 +124,16 @@ fetchForm.addEventListener("submit", async (e) => {
       body: JSON.stringify({ url })
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (_) {
+      const rawText = await response.text().catch(() => "");
+      throw new Error(rawText || `Server returned error (${response.status})`);
+    }
 
     if (!response.ok) {
-      throw new Error(data.detail || "Failed to fetch video details.");
+      throw new Error((data && data.detail) || `Failed to fetch video details (${response.status})`);
     }
 
     // Populate video metadata
@@ -192,10 +198,16 @@ downloadBtn.addEventListener("click", async () => {
       })
     });
 
-    const data = await response.json();
+    let data;
+    try {
+      data = await response.json();
+    } catch (_) {
+      const rawText = await response.text().catch(() => "");
+      throw new Error(rawText || `Server returned error (${response.status})`);
+    }
 
     if (!response.ok) {
-      throw new Error(data.detail || "Failed to initiate download.");
+      throw new Error((data && data.detail) || `Failed to initiate download (${response.status})`);
     }
 
     const downloadId = data.download_id;
