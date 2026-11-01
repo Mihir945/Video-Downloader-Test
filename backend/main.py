@@ -90,9 +90,24 @@ class DownloadRequest(BaseModel):
     format_id: Optional[str] = "best"
 
 
+def get_ffmpeg_binary() -> Optional[str]:
+    """Finds ffmpeg executable from PATH or bundled imageio_ffmpeg."""
+    exe = shutil.which("ffmpeg")
+    if exe:
+        return exe
+    try:
+        import imageio_ffmpeg
+        img_exe = imageio_ffmpeg.get_ffmpeg_exe()
+        if img_exe and os.path.exists(img_exe):
+            return img_exe
+    except Exception:
+        pass
+    return None
+
+
 def check_ffmpeg() -> bool:
-    """Check if ffmpeg executable is available in system PATH."""
-    return shutil.which("ffmpeg") is not None
+    """Check if ffmpeg executable is available in system PATH or imageio_ffmpeg."""
+    return get_ffmpeg_binary() is not None
 
 
 def cleanup_old_downloads(max_age_seconds: int = 3600):
@@ -167,7 +182,16 @@ def fetch_video_info(req: FetchRequest):
         "no_warnings": True,
         "nocheckcertificate": True,
         "ignoreerrors": False,
-        "socket_timeout": 15,
+        "socket_timeout": 20,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],
+            }
+        },
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
     }
 
     try:
@@ -344,14 +368,24 @@ def run_download_task(download_id: str, url: str, format_id: str):
         "no_warnings": True,
         "nocheckcertificate": True,
         "overwrites": True,
+        "socket_timeout": 30,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "web"],
+            }
+        },
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
     }
 
     # Pass explicit FFmpeg location if available
-    ffmpeg_exe = shutil.which("ffmpeg")
+    ffmpeg_exe = get_ffmpeg_binary()
     if ffmpeg_exe:
         ydl_opts["ffmpeg_location"] = os.path.dirname(ffmpeg_exe)
     else:
-        logger.warning("FFmpeg executable not detected on system PATH.")
+        logger.warning("FFmpeg executable not detected on system PATH or imageio_ffmpeg.")
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:

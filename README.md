@@ -6,6 +6,14 @@ This application allows users to fetch video metadata, select genuine quality st
 
 ---
 
+## 🌐 Live Web Application
+
+👉 **[https://video-downloader-test-q9wq.onrender.com/](https://video-downloader-test-q9wq.onrender.com/)**
+
+Open the link above in any browser on desktop or mobile to fetch and download videos directly online without installing anything!
+
+---
+
 ## ⚡ 1-Click Launch (Instant Local App)
 
 If you are running this locally on Windows:

@@ -20,3 +20,4 @@ echo [INFO] Server running at http://127.0.0.1:8000
 echo [INFO] Press CTRL+C to stop the server anytime.
 .\venv\Scripts\python.exe -m uvicorn backend.main:app --host 127.0.0.1 --port 8000
 pause
+

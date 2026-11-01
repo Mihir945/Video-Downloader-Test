@@ -5,16 +5,18 @@
  */
 
 // Configure Backend API base URL
-// Automatically detects if running on backend origin or standalone server (e.g. Live Server)
+// On production (Render, custom domain) or when served directly by FastAPI, use relative paths ("")
+// If running via Live Server (port 5500 / 3000) or file://, connect to local backend (http://127.0.0.1:8000)
 const getApiBase = () => {
-  if (window.location.origin && window.location.origin !== "null" && !window.location.origin.startsWith("file:")) {
-    if (window.location.port === "8000") {
-      return "";
-    }
-    const host = window.location.hostname || "127.0.0.1";
-    return `${window.location.protocol}//${host}:8000`;
+  if (!window.location.origin || window.location.origin === "null" || window.location.protocol === "file:") {
+    return "http://127.0.0.1:8000";
   }
-  return "http://127.0.0.1:8000";
+  // When running on a separate development server (e.g. VS Code Live Server on port 5500)
+  if (window.location.port === "5500" || window.location.port === "3000") {
+    return `http://${window.location.hostname || "127.0.0.1"}:8000`;
+  }
+  // Production (Render, custom domain) and standard FastAPI origin
+  return "";
 };
 const API_BASE = getApiBase();
 
