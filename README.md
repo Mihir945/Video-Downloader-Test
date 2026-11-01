@@ -16,13 +16,16 @@ Open the link above in any browser on desktop or mobile to fetch and download vi
 
 ## ⚡ 1-Click Launch (Instant Local App)
 
-If you are running this locally on Windows:
+If you are running this locally on your Windows laptop:
 
-1. Double-click the **[`run.bat`](run.bat)** file in the root folder.
-2. It will automatically start the backend server and open your browser to:
+### Option 1: Native Desktop GUI App (Tkinter)
+- Double-click **`run_gui.bat`** in the root folder.
+- Opens the native Windows desktop application window directly with thumbnail preview, quality selector, save location picker, and live progress bar.
+
+### Option 2: Browser Web App (FastAPI + HTML/CSS/JS)
+- Double-click **`run.bat`** in the root folder.
+- Starts the local backend server and automatically opens your web browser to:
    👉 **[http://127.0.0.1:8000](http://127.0.0.1:8000)**
-
-*(No manual terminal commands required!)*
 
 ---
 
