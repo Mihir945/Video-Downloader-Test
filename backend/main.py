@@ -117,13 +117,25 @@ def get_node_binary() -> Optional[str]:
 
 
 def get_base_ydl_opts() -> Dict[str, Any]:
-    """Constructs robust yt-dlp options supporting Node.js JS challenge runtime."""
+    """
+    Constructs robust yt-dlp options supporting multi-client fallback and JS runtimes.
+    Uses 'visionos', 'android', and 'web' clients:
+    - 'visionos' is a JS-less client providing full resolution video (up to 4K) without
+      requiring external JavaScript engines or triggering desktop datacenter bot challenges.
+    - 'android' provides reliable mobile stream fallback.
+    - 'web' handles standard platforms.
+    """
     node_exe = get_node_binary()
 
     opts: Dict[str, Any] = {
         "nocheckcertificate": True,
         "no_warnings": True,
         "remote_components": ["ejs:github"],
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["visionos", "android", "web"]
+            }
+        },
         "http_headers": {
             "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
             "Accept-Language": "en-US,en;q=0.9",
@@ -301,7 +313,7 @@ def fetch_video_info(req: FetchRequest):
             # 2. Filter available video streams by height/resolution
             seen_heights = set()
             sorted_formats = sorted(
-                [f for f in raw_formats if f.get("vcodec") != "none" and f.get("height")],
+                [f for f in raw_formats if f.get("vcodec") != "none" and f.get("height") and (f.get("url") or f.get("manifest_url"))],
                 key=lambda x: (x.get("height", 0), x.get("tbr") or 0),
                 reverse=True
             )
@@ -329,7 +341,7 @@ def fetch_video_info(req: FetchRequest):
             # If no separated video streams were found, check direct audio/video formats
             if len(quality_options) == 1:
                 for fmt in raw_formats:
-                    if fmt.get("vcodec") != "none":
+                    if fmt.get("vcodec") != "none" and (fmt.get("url") or fmt.get("manifest_url")):
                         fid = fmt.get("format_id")
                         resolution = fmt.get("resolution") or fmt.get("format_note") or "Standard"
                         quality_options.append({
