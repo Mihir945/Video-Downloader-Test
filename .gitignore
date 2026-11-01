@@ -1,0 +1,23 @@
+# Virtual Environment
+venv/
+env/
+ENV/
+.venv/
+
+# Python Cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.pyc
+
+# Downloaded Media Files (Keep folder structure only)
+downloads/*
+!downloads/.gitkeep
+
+# Operating System & IDE Files
+.DS_Store
+Thumbs.db
+Desktop.ini
+.idea/
+.vscode/
+*.swp

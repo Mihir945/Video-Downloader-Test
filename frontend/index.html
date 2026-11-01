@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Video Downloader</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <div class="container">
+    <header class="app-header">
+      <h1>Video Downloader</h1>
+      <p class="subtitle">Download authorized videos with audio merged in MP4 format</p>
+    </header>
+
+    <!-- Top Responsive Ad Container (Policy-Compliant: Isolated from user inputs and download actions) -->
+    <aside id="ad-top-banner" class="ad-container hidden" aria-label="Advertisement">
+      <span class="ad-label">Advertisement</span>
+      <div class="ad-content"></div>
+    </aside>
+
+    <!-- Error & Info Alerts -->
+    <div id="alertBox" class="alert hidden" role="alert"></div>
+
+    <!-- URL Input Section -->
+    <section class="card input-section">
+      <form id="fetchForm">
+        <label for="videoUrl" class="input-label">Video URL</label>
+        <div class="input-group">
+          <input 
+            type="url" 
+            id="videoUrl" 
+            placeholder="Paste video URL here (e.g., https://...)" 
+            required 
+            autocomplete="off"
+          />
+          <button type="submit" id="fetchBtn" class="btn btn-primary">
+            <span class="btn-text">Fetch Video</span>
+            <span class="btn-spinner hidden"></span>
+          </button>
+        </div>
+      </form>
+    </section>
+
+    <!-- Video Preview & Download Section -->
+    <section id="previewCard" class="card preview-section hidden">
+      <div class="video-info">
+        <div class="thumbnail-wrapper">
+          <img id="videoThumbnail" src="" alt="Video thumbnail preview" />
+          <span id="videoDuration" class="duration-badge">0:00</span>
+        </div>
+        <div class="video-meta">
+          <h2 id="videoTitle" class="video-title">Video Title</h2>
+          <p id="videoUploader" class="video-uploader">Channel / Creator</p>
+          
+          <div class="quality-group">
+            <label for="qualitySelect" class="input-label">Select Quality / Format</label>
+            <select id="qualitySelect" class="select-dropdown">
+              <!-- Dynamically populated with genuine available formats -->
+            </select>
+          </div>
+
+          <button id="downloadBtn" class="btn btn-success">
+            Download MP4
+          </button>
+        </div>
+      </div>
+
+      <!-- Download Progress Tracking Section -->
+      <div id="progressSection" class="progress-section hidden">
+        <div class="progress-header">
+          <span id="statusLabel" class="status-label">Initializing download...</span>
+          <span id="progressPercent" class="progress-percent">0%</span>
+        </div>
+        <div class="progress-bar-container" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+          <div id="progressBar" class="progress-bar-fill" style="width: 0%;"></div>
+        </div>
+        <div id="downloadAction" class="download-action hidden">
+          <p class="success-text">Your MP4 video is ready!</p>
+          <a id="manualDownloadLink" class="btn btn-secondary" href="#" download>
+            Click here if file download didn't start automatically
+          </a>
+        </div>
+      </div>
+    </section>
+
+    <!-- Bottom Responsive Ad Container (Policy-Compliant: Positioned above footer, away from action buttons) -->
+    <aside id="ad-bottom-banner" class="ad-container hidden" aria-label="Advertisement">
+      <span class="ad-label">Advertisement</span>
+      <div class="ad-content"></div>
+    </aside>
+
+    <footer class="app-footer">
+      <p class="footer-links">
+        <a href="/privacy.html" class="footer-link">Privacy Policy</a>
+      </p>
+      <p>Only download content you own or have explicit authorization to download. DRM-protected content is strictly not supported.</p>
+    </footer>
+  </div>
+
+  <!-- Google AdSense Modular Integration (Disabled by default until approved) -->
+  <script src="ads.js"></script>
+  <!-- Core Video Downloader Logic -->
+  <script src="script.js"></script>
+</body>
+</html>
