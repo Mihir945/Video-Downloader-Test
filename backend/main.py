@@ -105,6 +105,50 @@ def get_ffmpeg_binary() -> Optional[str]:
     return None
 
 
+def get_node_binary() -> Optional[str]:
+    """Finds Node.js executable for yt-dlp JS challenge solving."""
+    exe = shutil.which("node")
+    if exe:
+        return exe
+    for path in ["/usr/bin/node", "/usr/local/bin/node", "C:\\Program Files\\nodejs\\node.exe"]:
+        if os.path.exists(path):
+            return path
+    return None
+
+
+def get_cookie_file() -> Optional[str]:
+    """Finds cookies.txt file if provided by user/deployment."""
+    candidates = [
+        BASE_DIR / "cookies.txt",
+        Path(__file__).resolve().parent / "cookies.txt",
+    ]
+    for c in candidates:
+        if c.is_file() and c.stat().st_size > 0:
+            return str(c)
+    return None
+
+
+def get_base_ydl_opts() -> Dict[str, Any]:
+    """Constructs robust yt-dlp options supporting JS runtimes and challenge solvers."""
+    node_exe = get_node_binary()
+    cookie_file = get_cookie_file()
+
+    opts: Dict[str, Any] = {
+        "nocheckcertificate": True,
+        "no_warnings": True,
+        "remote_components": ["ejs:github"],
+        "http_headers": {
+            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/123.0.0.0 Safari/537.36",
+            "Accept-Language": "en-US,en;q=0.9",
+        }
+    }
+    if node_exe:
+        opts["js_runtimes"] = {"node": {"path": node_exe}}
+    if cookie_file:
+        opts["cookiefile"] = cookie_file
+    return opts
+
+
 def check_ffmpeg() -> bool:
     """Check if ffmpeg executable is available in system PATH or imageio_ffmpeg."""
     return get_ffmpeg_binary() is not None
@@ -174,25 +218,15 @@ def fetch_video_info(req: FetchRequest):
     if not url or not (url.startswith("http://") or url.startswith("https://")):
         raise HTTPException(status_code=400, detail="Invalid URL. Please enter a valid HTTP or HTTPS video URL.")
 
-    # Options for fast metadata extraction without downloading
-    ydl_opts = {
+    # Options for fast metadata extraction using JS challenge solver and modern player clients
+    ydl_opts = get_base_ydl_opts()
+    ydl_opts.update({
         "extract_flat": False,
         "skip_download": True,
         "quiet": True,
-        "no_warnings": True,
-        "nocheckcertificate": True,
         "ignoreerrors": False,
-        "socket_timeout": 20,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "web"],
-            }
-        },
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-    }
+        "socket_timeout": 25,
+    })
 
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
@@ -282,12 +316,17 @@ def fetch_video_info(req: FetchRequest):
         logger.warning(f"DownloadError during fetch: {error_msg}")
         if "DRM" in error_msg.upper():
             detail = "This video is protected by Digital Rights Management (DRM) and cannot be downloaded."
-        elif "Private video" in error_msg or "Sign in" in error_msg:
-            detail = "This video is private, restricted, or requires authentication."
+        elif "Private video" in error_msg:
+            detail = "This video is set to Private by its owner and cannot be accessed."
+        elif "Sign in to confirm your age" in error_msg:
+            detail = "This video is age-restricted on YouTube and requires age verification."
+        elif "Sign in to confirm you're not a bot" in error_msg:
+            detail = "YouTube triggered a bot protection check on the server IP. Please try another video or retry in a few moments."
         elif "Incomplete YouTube ID" in error_msg or "Video unavailable" in error_msg:
-            detail = "Video is unavailable. Please verify the URL."
+            detail = "Video is unavailable or has been removed. Please verify the URL."
         else:
             clean_error = re.sub(r"^ERROR:\s*", "", error_msg)
+            clean_error = re.sub(r"\[youtube\]\s*", "", clean_error)
             detail = f"Could not access video: {clean_error}"
         raise HTTPException(status_code=400, detail=detail)
     except Exception as e:
@@ -358,27 +397,17 @@ def run_download_task(download_id: str, url: str, format_id: str):
         except Exception as err:
             logger.error(f"Error inside postprocessor_hook: {err}")
 
-    ydl_opts = {
+    ydl_opts = get_base_ydl_opts()
+    ydl_opts.update({
         "format": format_selector,
         "outtmpl": output_template,
         "merge_output_format": "mp4",
         "progress_hooks": [progress_hook],
         "postprocessor_hooks": [postprocessor_hook],
         "quiet": True,
-        "no_warnings": True,
-        "nocheckcertificate": True,
         "overwrites": True,
-        "socket_timeout": 30,
-        "extractor_args": {
-            "youtube": {
-                "player_client": ["android", "web"],
-            }
-        },
-        "http_headers": {
-            "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
-            "Accept-Language": "en-US,en;q=0.9",
-        }
-    }
+        "socket_timeout": 35,
+    })
 
     # Pass explicit FFmpeg location if available
     ffmpeg_exe = get_ffmpeg_binary()
