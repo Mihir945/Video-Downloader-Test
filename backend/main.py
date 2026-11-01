@@ -116,6 +116,40 @@ def get_node_binary() -> Optional[str]:
     return None
 
 
+def get_optional_cookie_opts() -> Dict[str, Any]:
+    """
+    Securely detects optional cookie authentication for authorized videos without exposing secrets.
+    - Supports local development browser cookies via YTDLP_COOKIES_FROM_BROWSER env var (e.g. 'chrome', 'firefox', 'edge').
+    - Supports a local or deployment cookies file via YTDLP_COOKIES_PATH env var or local cookies.txt.
+    - Never logs cookie contents, secrets, or session data.
+    - All cookie files are strictly excluded via .gitignore.
+    """
+    opts: Dict[str, Any] = {}
+
+    # 1. Environment variable for cookie file path
+    env_cookie_path = os.environ.get("YTDLP_COOKIES_PATH")
+    if env_cookie_path and Path(env_cookie_path).is_file():
+        opts["cookiefile"] = env_cookie_path
+        logger.info("[AUTH] Using optional cookie authentication from YTDLP_COOKIES_PATH.")
+        return opts
+
+    # 2. Local cookies.txt (if user created one locally for private/authorized videos)
+    for candidate in [BASE_DIR / "cookies.txt", Path(__file__).resolve().parent / "cookies.txt"]:
+        if candidate.is_file() and candidate.stat().st_size > 0:
+            opts["cookiefile"] = str(candidate)
+            logger.info("[AUTH] Using optional local cookies.txt file.")
+            return opts
+
+    # 3. Optional local browser cookies for local dev only (e.g. YTDLP_COOKIES_FROM_BROWSER=chrome)
+    browser = os.environ.get("YTDLP_COOKIES_FROM_BROWSER", "").strip().lower()
+    if browser in {"chrome", "firefox", "edge", "brave", "opera", "vivaldi", "chromium"}:
+        opts["cookiesfrombrowser"] = (browser, None, None, None)
+        logger.info(f"[AUTH] Using optional local browser cookies from: {browser}")
+        return opts
+
+    return opts
+
+
 def get_base_ydl_opts() -> Dict[str, Any]:
     """
     Constructs robust yt-dlp options supporting multi-client fallback and JS runtimes.
@@ -143,6 +177,9 @@ def get_base_ydl_opts() -> Dict[str, Any]:
     }
     if node_exe:
         opts["js_runtimes"] = {"node": {"path": node_exe}}
+
+    cookie_opts = get_optional_cookie_opts()
+    opts.update(cookie_opts)
     return opts
 
 

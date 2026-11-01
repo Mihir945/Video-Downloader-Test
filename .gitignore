@@ -14,6 +14,13 @@ __pycache__/
 downloads/*
 !downloads/.gitkeep
 
+# Authentication & Sensitive Files (Never commit credentials or cookies)
+*cookie*
+cookies.txt
+*.cookie
+.env
+.env.*
+
 # Operating System & IDE Files
 .DS_Store
 Thumbs.db
